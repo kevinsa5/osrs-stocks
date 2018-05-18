@@ -1,0 +1,5 @@
+*.pyc
+elm-stuff
+logs
+old
+index.html
