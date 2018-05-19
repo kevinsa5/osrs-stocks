@@ -15,5 +15,6 @@ CREATE TABLE items (
     name TEXT,
     price INTEGER,
     examine TEXT,
+    icon BYTEA,
     created_date timestamp default current_timestamp
 );
