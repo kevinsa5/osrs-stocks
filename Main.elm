@@ -30,6 +30,8 @@ import LineChart.Legends as Legends
 import LineChart.Area as Area
 import Color
 
+import Regex exposing (regex, escape, HowMany(..))
+
 -- MODEL
 
 type alias ChartData =
@@ -164,6 +166,10 @@ isEnter code =
 type alias Mdl =
     Material.Model
 
+wikiLink : Item -> String
+wikiLink item =
+    "http://oldschoolrunescape.wikia.com/wiki/" ++ (item.name |> replace " " "_")
+
 itemTable : Item -> Html Msg
 itemTable item =
     Table.table []
@@ -185,6 +191,10 @@ itemTable item =
         , Table.tr []
             [ Table.td [] [ text "Examine" ]
             , Table.td [] [ text item.examine ]
+            ]
+        , Table.tr []
+            [ Table.td [] [ text "Wiki Page" ]
+            , Table.td [] [ a [ href (wikiLink item) ] [ text "Link" ] ] 
             ]
         ]
     ]
@@ -301,3 +311,10 @@ main =
         , subscriptions = always Sub.none
         , update = update
         }
+
+
+-- UTILS
+replace : String -> String -> String -> String
+replace search substitution string =
+        string
+                |> Regex.replace All (regex (escape search)) (\_ -> substitution)
