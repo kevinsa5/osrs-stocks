@@ -1,4 +1,4 @@
-
+import psycopg2
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
@@ -6,7 +6,9 @@ import time
 import re
 from utils import sql_conn
 
-lookup_list = range(13657, 20000)
+res = sql_conn.execute("SELECT item_id FROM public.items")
+
+lookup_list = [i[0] for i in res]
 
 def lookup_item(item_id):
     
@@ -30,7 +32,6 @@ def lookup_item(item_id):
         title = soup.find("title").text
         metadata['page title'] = title.split(" - ")[0]
         
-        
         # this works for both members and f2p
         description = soup.find(class_ = "item-description")
         
@@ -39,7 +40,11 @@ def lookup_item(item_id):
         
         item_examine = description.find("p").text
         metadata['examine'] = item_examine
-        
+
+        icon_link = soup.find_all("img", {"alt" : item_name})[0].attrs['src']
+        icon_data = requests.get(icon_link).content
+        metadata['icon'] = icon_data
+
         stats = soup.find(class_ = "stats")
         item_price = stats.find("h3").find("span").attrs['title']
     
@@ -94,5 +99,5 @@ for item_id in lookup_list:
         print item_id
         continue
     sql_conn.execute("DELETE FROM public.items WHERE item_id = %s", (item_id,))
-    sql_conn.execute("INSERT INTO public.items(item_id, name, price, examine) VALUES (%s, %s, %s, %s)", (metadata['id'], metadata['name'], metadata['price'], metadata['examine']) )
+    sql_conn.execute("INSERT INTO public.items(item_id, name, price, examine, icon) VALUES (%s, %s, %s, %s, %s)", (metadata['id'], metadata['name'], metadata['price'], metadata['examine'], psycopg2.Binary(metadata['icon'])) )
     print item_id, metadata['name']    
