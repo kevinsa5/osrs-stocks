@@ -15,8 +15,33 @@ import Material.Table as Table
 import Material.List as Lists
 import Material.Options as Options exposing (css)
 
+import LineChart
+import LineChart.Junk as Junk exposing (..)
+import LineChart.Dots as Dots
+import LineChart.Container as Container
+import LineChart.Interpolation as Interpolation
+import LineChart.Axis.Intersection as Intersection
+import LineChart.Axis as Axis
+import LineChart.Legends as Legends
+import LineChart.Line as Line
+import LineChart.Events as Events
+import LineChart.Grid as Grid
+import LineChart.Legends as Legends
+import LineChart.Area as Area
+import Color
 
 -- MODEL
+
+type alias ChartData =
+    { x : Float
+    , y : Float
+    }
+
+dataDecoder = map2 ChartData
+    (field "x" float)
+    (field "y" float)
+
+dataListDecoder = JD.list dataDecoder
 
 type alias Item =
     { name : String
@@ -36,6 +61,8 @@ type alias Model =
     , searchSuggestions : List String
     , item : Item
     , iconUrl : String
+    , chartHover : Maybe ChartData
+    , chartData : List ChartData
     , mdl :
         Material.Model
         -- Boilerplate: model store for any and all Mdl components used
@@ -48,6 +75,8 @@ model =
     , searchSuggestions = []
     , item = (Item "" 0 "")
     , iconUrl = ""
+    , chartHover = Nothing
+    , chartData = []
     , mdl =
         Material.model
         -- Boilerplate: Always use this initial Mdl model store
@@ -61,8 +90,10 @@ model =
 type Msg
     = UpdateName String
     | UpdateSuggestions (Result Http.Error (List String))
+    | UpdatePrices (Result Http.Error (List ChartData))
     | DoSearch
     | LookupData (Result Http.Error Item)
+    | Hover (Maybe ChartData)
     | Mdl (Material.Msg Msg)
 
 -- Boilerplate: Msg clause for internal Mdl messages.
@@ -86,9 +117,19 @@ update msg model =
             , Cmd.none
             )
 
+        UpdatePrices (Ok lis) ->
+            ( { model | chartData = lis }
+            , Cmd.none
+            )
+
+        UpdatePrices (Err _) ->
+            ( { model | chartData = [] }
+            , Cmd.none
+            )
+
         DoSearch ->
             ( model
-            , lookupItem model.searchStr
+            , Cmd.batch [ lookupItem model.searchStr, lookupPrices model.searchStr ]
             )
 
         LookupData (Ok newItem) ->
@@ -98,6 +139,11 @@ update msg model =
 
         LookupData (Err _) ->
             ( { model | item = (Item "Fail" -1 "Gremlins"), iconUrl = "http://kevbase.com/osrs-stocks/static/error.png" }
+            , Cmd.none
+            )
+
+        Hover hover ->
+            ( { model | chartHover = hover }
             , Cmd.none
             )
 
@@ -150,7 +196,29 @@ suggestionList list =
             Lists.li [] [ Lists.content [] [ text str ] ]
             )
         )
-            
+
+priceChart : Model -> Html Msg
+priceChart model = 
+    LineChart.viewCustom
+        { y = Axis.default 450 "Price" .y
+        , x = Axis.default 700 "Date?  Dunno" .x
+        , container = Container.styled "line-chart-1" [ ("font-family", "monospace") ]
+        , interpolation = Interpolation.default
+        , intersection = Intersection.default
+        , legends = Legends.default
+        , events = Events.hoverOne Hover
+        , junk = 
+            Junk.hoverOne model.chartHover
+                [ ( "X", toString << .x )
+                , ( "Y", toString << .y )
+                ]
+        , grid = Grid.default
+        , area = Area.default
+        , line = Line.default
+        , dots = Dots.hoverOne model.chartHover
+        }
+        [ LineChart.line Color.blue Dots.circle model.item.name model.chartData ]
+
 
 view : Model -> Html Msg
 view model =
@@ -188,9 +256,10 @@ view model =
                             ] 
                         ]
                         []
+                    , td [] [ div [ class "container" ] [ priceChart model ] ]
                     ]
                 ]
-             ]
+            ]
         ]
         |> Material.Scheme.top
 
@@ -215,6 +284,14 @@ lookupSuggestions name =
             "http://kevbase.com/osrs-stocks/api/search/" ++ name
     in
         Http.send UpdateSuggestions (Http.get url suggestionsDecoder)
+
+lookupPrices : String -> Cmd Msg
+lookupPrices name =
+    let
+        url =
+            "http://kevbase.com/osrs-stocks/api/history/" ++ name
+    in
+        Http.send UpdatePrices (Http.get url dataListDecoder)
 
 main : Program Never Model Msg
 main =
